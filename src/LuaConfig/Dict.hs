@@ -1,7 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
-{-| Compute factorials in Haskell -}
+module LuaConfig.Dict where
+
 import HsLua
+import Data.ByteString
+import Data.Int (Int64)
+
+data LuaVal = LuaS ByteString
+            | LuaI Int64
+            | LuaN Double
+            | LuaT
+  deriving Show
 
 testInit :: LuaE Exception Status
 testInit = openlibs >> HsLua.dofile "test.lua"
@@ -23,10 +32,3 @@ f p action = do
     True  -> do
       x <- action
       (x:) <$> f p action
-
-
-main :: IO ()
-main =
- do
-  run @HsLua.Exception (openlibs >> dostring  "print('Hello, from Lua')\n")
-  return ()

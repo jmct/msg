@@ -21,7 +21,22 @@ maintainer:         hackage@jmct.cc
 -- category:
 extra-source-files: CHANGELOG.md
 
+common depends
+    build-depends:    base ^>=4.15.0.0
+                    , containers
+                    , hslua
+
+library
+    build-depends:    base ^>=4.15.0.0
+                    , containers
+                    , hslua
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
 executable msg
+    build-depends:    base ^>=4.15.0.0
+                    , containers
+                    , hslua
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
@@ -29,7 +44,5 @@ executable msg
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base ^>=4.15.0.0
-                    , hslua
     hs-source-dirs:   app
     default-language: Haskell2010
