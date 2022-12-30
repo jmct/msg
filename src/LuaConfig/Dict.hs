@@ -3,32 +3,59 @@
 module LuaConfig.Dict where
 
 import HsLua
+
 import Data.ByteString
 import Data.Int (Int64)
 
+import qualified Data.Map as M
+import           Data.Map (Map)
+
+type LuaTable k v = Map k v
+
 data LuaVal = LuaS ByteString
+            | LuaB Bool
             | LuaI Int64
-            | LuaN Double
-            | LuaT
-  deriving Show
+            | LuaN Number
+            | LuaT (LuaTable LuaVal (Maybe LuaVal))
+  deriving (Show, Eq, Ord)
 
-testInit :: LuaE Exception Status
-testInit = openlibs >> HsLua.dofile "test.lua"
+-- getLuaVal :: Name -> LuaE Exception LuaVal
+-- getLuaVal name =
+--  do typ <- getglobal name
 
-toAsscL :: StackIndex -> LuaE Exception [(Maybe HsLua.Integer, Maybe HsLua.Integer)]
-toAsscL idx = pushnil >> f (next idx) act
-  where
-    act = do
-      k <- tointeger (nth 2)
-      v <- tointeger (nth 1)
+getLuaTable :: Name -> LuaE Exception (LuaTable LuaVal (Maybe LuaVal))
+getLuaTable name =
+ do typ <- getglobal name
+    if typ /= TypeTable
+    then gettop >>= throwTypeMismatchError "Table"
+    else do
+      idx <- gettop
+      pushnil
+      populateHash M.empty (next idx) process
+ where
+    process = do
+      tyk <- ltype (nth 2)
+      tyv <- ltype (nth 1)
+      k <- getVal tyk (nth 2)
+      v <- getVal tyv (nth 1)
       pop 1
       pure (k,v)
 
-f :: LuaE e Bool -> LuaE e a -> LuaE e [a]
-f p action = do
+getVal :: LuaError e => Type -> StackIndex -> LuaE e (Maybe LuaVal)
+getVal ty idx
+ | ty == TypeBoolean = (Just . LuaB) <$> toboolean idx
+ | ty == TypeString  = (fmap LuaS) <$> tostring idx
+ | ty == TypeNumber  = (fmap LuaN) <$> tonumber idx
+-- | ty == TypeTable   = (fmap LuaT) <$> getLuaTable idx
+ | otherwise         = pure Nothing
+      
+populateHash :: LuaTable LuaVal v -> LuaE e Bool -> LuaE e (Maybe LuaVal,v) -> LuaE e (LuaTable LuaVal v)
+populateHash tab p action = do
   b <- p
   case b of
-    False -> pure []
+    False -> pure tab
     True  -> do
-      x <- action
-      (x:) <$> f p action
+      (k,v) <- action
+      case k of
+        Nothing -> undefined -- failLua "TODO"
+        Just k  -> populateHash (M.insert k v tab) p action

@@ -3,30 +3,19 @@
 {-| Compute factorials in Haskell -}
 import HsLua
 
-testInit :: LuaE Exception Status
-testInit = openlibs >> HsLua.dofile "test.lua"
+import LuaConfig.Dict
 
-toAsscL :: StackIndex -> LuaE Exception [(Maybe HsLua.Integer, Maybe HsLua.Integer)]
-toAsscL idx = pushnil >> f (next idx) act
-  where
-    act = do
-      k <- tointeger (nth 2)
-      v <- tointeger (nth 1)
-      pop 1
-      pure (k,v)
+-- testInit :: LuaE Exception Status
+testInit = openbase >> HsLua.dofile "test.lua" >> getLuaTable "test_table"
 
-f :: LuaE e Bool -> LuaE e a -> LuaE e [a]
-f p action = do
-  b <- p
-  case b of
-    False -> pure []
-    True  -> do
-      x <- action
-      (x:) <$> f p action
+testGettingTable name = testInit >> getLuaTable name
 
+-- loadFile, getglobal, gettop, gettable
 
 main :: IO ()
 main =
  do
   run @HsLua.Exception (openlibs >> dostring  "print('Hello, from Lua')\n")
+  tab <- run @HsLua.Exception testInit
+  print tab
   return ()
