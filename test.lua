@@ -7,11 +7,17 @@ conversion = {}
 conversion["md"]  = {"html"}
 conversion["lhs"] = {"html", "lhs"}
 
+posts = {}
+posts["source"] = "posts"
+posts["conversion"] = conversion
+
 site = {}
-site["posts"] = ""
+site["root"] = "my_site"
+site["dirs"] = { posts }
 
 test_table = {5,3,1}
 test_table["fun"] = {'a','b','c'}
+test_table["site"] = site
 
 test_val = 42
 

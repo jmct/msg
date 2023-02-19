@@ -18,50 +18,59 @@ data LuaVal = LuaS ByteString
             | LuaB Bool
             | LuaI Int64
             | LuaN Number
-            | LuaT (LuaTable LuaVal (Maybe LuaVal))
+            | LuaT (LuaTable LuaVal LuaVal)
   deriving (Show, Eq, Ord)
 
--- getLuaVal :: Name -> LuaE Exception LuaVal
--- getLuaVal name =
---  do typ <- getglobal name
+-- | Get a `LuaTable` representing the value of `name` in the Lua State.
+-- if `name` is not a table, calling this function will result in a LuaError
+getLuaTableName :: LuaError e => Name -> LuaE e (LuaTable LuaVal LuaVal)
+getLuaTableName name =
+ do typ <- getglobal name
+    idx <- gettop
+    -- trace ("idx: " ++ show idx) (pure ())
+    if typ /= TypeTable
+    then throwTypeMismatchError "Table" idx
+    else getLuaTable' idx
 
-getLuaTable' :: LuaError e => StackIndex -> LuaE e (LuaTable LuaVal (Maybe LuaVal))
-getLuaTable' idx = pushnil >> populateHash M.empty (next idx) process
+-- | Get the `LuaTable` at the given `StackIndex`.
+-- I'm not sure what this function will do if it's not actually a table.
+-- I also don't intend on exposing this function as part of the public API
+-- Note to future me: if you make this function public, figure out what it does
+-- if the value at `idx` is not a table.
+getLuaTable' :: LuaError e => StackIndex -> LuaE e (LuaTable LuaVal LuaVal)
+getLuaTable' idx = pushnil >> populateMap M.empty (next idx) process
  where
     process = do
       tyk <- ltype (nth 2)
       tyv <- ltype (nth 1)
-      trace ("tyk: " ++ show tyk) (pure ())
-      trace ("tyb: " ++ show tyv) (pure ())
-      k <- getVal tyk (nth 2)
-      v <- getVal tyv (nth 1)
+      -- trace ("tyk: " ++ show tyk) (pure ())
+      -- trace ("tyv: " ++ show tyv) (pure ())
+      mk <- getVal tyk (nth 2)
+      -- trace ("k: " ++ show k) (pure ())
+      mv <- getVal tyv (nth 1)
+      elem <- pure ((\k v -> (k,v)) <$> mk <*> mv)
+      -- trace ("v: " ++ show v) (pure ())
       pop 1
-      pure (k,v)
-
-getLuaTable :: LuaError e => Name -> LuaE e (LuaTable LuaVal (Maybe LuaVal))
-getLuaTable name =
- do typ <- getglobal name
-    idx <- gettop
-    trace ("idx: " ++ show idx) (pure ())
-    if typ /= TypeTable
-    then throwTypeMismatchError "Table" idx
-    else getLuaTable' idx
+      pure elem
 
 getVal :: LuaError e => Type -> StackIndex -> LuaE e (Maybe LuaVal)
 getVal ty idx
  | ty == TypeBoolean = (Just . LuaB) <$> toboolean idx
  | ty == TypeString  = (fmap LuaS) <$> tostring idx
  | ty == TypeNumber  = (fmap LuaN) <$> tonumber idx
- | ty == TypeTable   = (Just . LuaT) <$> getLuaTable' idx
+ | ty == TypeTable   =
+  do
+    t <- gettop >>= getLuaTable'
+    pure (Just (LuaT t))
  | otherwise         = pure Nothing
       
-populateHash :: LuaTable LuaVal v -> LuaE e Bool -> LuaE e (Maybe LuaVal,v) -> LuaE e (LuaTable LuaVal v)
-populateHash tab p action = do
+populateMap :: LuaTable LuaVal v -> LuaE e Bool -> LuaE e (Maybe (LuaVal,v)) -> LuaE e (LuaTable LuaVal v)
+populateMap tab p action = do
   b <- p
   case b of
     False -> pure tab
     True  -> do
-      (k,v) <- action
-      case k of
-        Nothing -> undefined -- failLua "TODO"
-        Just k  -> populateHash (M.insert k v tab) p action
+      elem <- action
+      case elem of
+        Nothing     -> populateMap tab p action -- do not add this elem
+        Just (k,v)  -> populateMap (M.insert k v tab) p action
